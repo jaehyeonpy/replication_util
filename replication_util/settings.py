@@ -123,3 +123,7 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
+IS_LOG_RECV_THREAD_ENABLED = False
+
+LOG_RECV_THREAD = None

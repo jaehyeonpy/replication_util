@@ -1,36 +1,28 @@
-from pymysqlreplication import BinLogStreamReader
-from pymysqlreplication.event import *
+import threading
 
 from django.http import JsonResponse
+from django.views import View
 
-from .models import *
-
-
-MYSQL_SETTINGS = {"host": "127.0.0.1", "port": 3306, "user": "root", "passwd": "1234"}
-
-ONLY_EVENTS = [
-        QueryEvent,
-        MariadbAnnotateRowsEvent
-    ]
-
-event_to_model = {
-        'QueryEvent': QueryEventModel,
-        'MariadbAnnotateRowsEvent': MariadbAnnotateRowsEventModel
-    }
+from .replication import recv_log
+from replication_util.settings import IS_LOG_RECV_THREAD_ENABLED, LOG_RECV_THREAD
 
 
-def temp(request):
-    binlog_stream = BinLogStreamReader(
-        connection_settings=MYSQL_SETTINGS, server_id=3, 
-        blocking=True, only_events=ONLY_EVENTS,
-        is_mariadb=True, annotate_rows_event=True
-    )
+class Temp(View):
+    def get(self, request):
+        # Django recommends doing async things for this kind of work, but,
+        # I did it by using thread temporarily.
+        #
+        # I know using global variable is one of bad practices, but,
+        # it is okay because the variables are used in the following limited way.
+        #
+        # Django usually put variables for state management in settings.py, so,
+        # I import and use necessary ones from there.
+        global IS_LOG_RECV_THREAD_ENABLED
+        global LOG_RECV_THREAD
 
-    for binlogevent in binlog_stream:
-        event_model = event_to_model[type(binlogevent).__name__]
+        if IS_LOG_RECV_THREAD_ENABLED == False:
+            IS_LOG_RECV_THREAD_ENABLED = True
+            LOG_RECV_THREAD = threading.Thread(target=recv_log)
+            LOG_RECV_THREAD.start()
 
-        model_next_row_num = event_model.objects.count() + 1
-        event_model.objects.create_model(model_next_row_num, binlogevent)
-        print(event_model.__name__, model_next_row_num)
-
-    return JsonResponse({})
+        return JsonResponse({})
